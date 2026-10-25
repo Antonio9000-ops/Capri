@@ -28,7 +28,7 @@ class MainActivity : AppCompatActivity() {
         ViewCompat.setOnApplyWindowInsetsListener(view) { v, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             if (v.width > 0 && v.height > 0 && engine.screenW == 0) {
-                view.initEngine(v.width, v.height, v.height - bars.bottom - PetEngine.SIZE)
+                view.initEngine(v.width, v.height, v.height - bars.bottom)
             }
             insets
         }

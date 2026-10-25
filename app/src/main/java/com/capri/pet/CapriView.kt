@@ -9,7 +9,6 @@ import android.hardware.SensorManager
 import android.os.Handler
 import android.os.Looper
 import android.util.AttributeSet
-import android.util.Log
 import android.view.MotionEvent
 import android.view.View
 import kotlin.math.sqrt
@@ -29,12 +28,9 @@ class CapriView @JvmOverloads constructor(
     private val srcRect = Rect()
     private val shadowRect = RectF()
     
-    // --- AJUSTES VISUALES ---
     val scale = 1.8f
-    // Margen para recortar el sprite si tiene mucho espacio vacío alrededor (ajusta esto si se ve mal)
-    private val cropPadding = 8f 
+    private val cropPadding = 8f
 
-    // Si el personaje camina al revés, cambia esto a intArrayOf(1, 0, 3, 2, 4, 5)
     private val frameOrder = intArrayOf(0, 1, 2, 3, 4, 5)
 
     var popup: CapriInputPopup? = null
@@ -45,7 +41,6 @@ class CapriView @JvmOverloads constructor(
     private var lastTapTime = 0L; private var lastTapX = 0f; private var lastTapY = 0f
     private val DT_TIMEOUT = 500L; private val DT_SLOP = 40f; private val DRAG_TH = 20f
 
-    // --- ACELERÓMETRO ---
     private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
     private val accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
     private var lastShakeTime = 0L
@@ -62,13 +57,10 @@ class CapriView @JvmOverloads constructor(
     fun setup(e: PetEngine) { engine = e }
     
     fun initEngine(w: Int, h: Int, floorY: Int) {
-        // Calculamos el tamaño visual real para que los pies toquen el suelo exacto
         val visualSize = (PetEngine.SIZE * scale).toInt()
-        val realFloorY = h - (h - floorY) - visualSize 
         val startX = w / 2 - (visualSize / 2)
-        
-        // Engañamos al engine para que su "suelo" sea el correcto
-        engine.init(w, h, h - visualSize, startX)
+        // El suelo real viene de MainActivity (ya resta la barra de navegación)
+        engine.init(w, h, floorY - visualSize, startX)
     }
     
     fun startLoop() { if (!running) { running = true; handler.post(tickRunnable) } }
@@ -96,7 +88,6 @@ class CapriView @JvmOverloads constructor(
             val z = event.values[2]
             val acceleration = sqrt((x * x + y * y + z * z).toDouble()) - SensorManager.GRAVITY_EARTH
             
-            // Si la aceleración supera un umbral y el personaje está en el suelo
             if (acceleration > 12 && System.currentTimeMillis() - lastShakeTime > 2000) {
                 lastShakeTime = System.currentTimeMillis()
                 if (engine.state != PetState.DRAG && engine.state != PetState.JUMP) {
@@ -131,9 +122,9 @@ class CapriView @JvmOverloads constructor(
         val frame = frames[engine.activeFrame.index] ?: return
 
         val scaledSize = PetEngine.SIZE * scale
-        val y = engine.posY + engine.visualBounce() + engine.visualJump()
+        // Forzamos todo a Float para evitar el error de compilación
+        val y = (engine.posY + engine.visualBounce() + engine.visualJump()).toFloat()
         
-        // Dibujar sombra
         if (engine.state == PetState.JUMP || engine.state == PetState.FALL) {
             val sx = engine.posX + (scaledSize - PetEngine.SHADOW_W) / 2f
             val sy = engine.floorY + scaledSize - PetEngine.SHADOW_H
@@ -141,24 +132,24 @@ class CapriView @JvmOverloads constructor(
             canvas.drawOval(shadowRect, shadowPaint)
         }
 
-        // 1. Rectángulo de destino (dónde se dibuja en la pantalla)
-        drawRect.set(engine.posX.toFloat(), y, engine.posX + scaledSize, y + scaledSize)
+        val posXFloat = engine.posX.toFloat()
+        drawRect.set(posXFloat, y, posXFloat + scaledSize, y + scaledSize)
         
-        // 2. Rectángulo de origen (recortando los bordes vacíos para que se vea mejor)
-        srcRect.set(cropPadding.toInt(), cropPadding.toInt(), PetEngine.SIZE - cropPadding.toInt(), PetEngine.SIZE - cropPadding.toInt())
+        val paddingInt = cropPadding.toInt()
+        srcRect.set(paddingInt, paddingInt, PetEngine.SIZE - paddingInt, PetEngine.SIZE - paddingInt)
         
         canvas.drawBitmap(frame, srcRect, drawRect, paint)
     }
 
-    // Comprueba si el dedo tocó al personaje
     private fun isTouchingCharacter(x: Float, y: Float): Boolean {
         if (!::engine.isInitialized) return false
         val scaledSize = PetEngine.SIZE * scale
-        val visualY = engine.posY + engine.visualBounce() + engine.visualJump()
+        val visualY = (engine.posY + engine.visualBounce() + engine.visualJump()).toFloat()
         
-        // Añadimos un margen de tolerancia de 20 píxeles para que sea más fácil tocarlo
         val padding = 20f
-        return x >= engine.posX - padding && x <= engine.posX + scaledSize + padding &&
+        val posXFloat = engine.posX.toFloat()
+        
+        return x >= posXFloat - padding && x <= posXFloat + scaledSize + padding &&
                y >= visualY - padding && y <= visualY + scaledSize + padding
     }
 
@@ -167,7 +158,6 @@ class CapriView @JvmOverloads constructor(
         
         when (ev.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                // Si no toca al personaje, ignoramos el evento
                 if (!isTouchingCharacter(ev.x, ev.y)) return false
                 
                 downX = ev.x; downY = ev.y; downTime = System.currentTimeMillis(); isTap = true
@@ -196,7 +186,6 @@ class CapriView @JvmOverloads constructor(
                     if (dt in 1..DT_TIMEOUT && near) {
                         lastTapTime = 0L
                         if (!engine.isThinking && popup?.isShowing() != true) {
-                            // Posicionamos el popup justo encima de la cabeza
                             val headY = (engine.posY + engine.visualJump()).toInt() - 20
                             onRequestInput?.invoke(engine.posX, headY)
                         }
