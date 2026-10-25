@@ -3,6 +3,7 @@ package com.capri.pet
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -13,12 +14,12 @@ object AiService {
     private val executor = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
     
-    // Endpoint y modelo de OpenRouter
     private const val ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
     private const val MODEL = "openrouter/free"
 
     fun ask(ctx: Context, prompt: String, onSuccess: (String) -> Unit, onError: () -> Unit) {
         val key = SecurityHelper.getApiKey(ctx) ?: return onError()
+        
         executor.execute {
             try {
                 val conn = (URL(ENDPOINT).openConnection() as HttpURLConnection).apply {
@@ -28,13 +29,13 @@ object AiService {
                     doOutput = true
                     setRequestProperty("Content-Type", "application/json")
                     setRequestProperty("Authorization", "Bearer $key")
-                    // OpenRouter requiere estos headers para identificación
                     setRequestProperty("HTTP-Referer", "https://github.com/Antonio9000-ops/Capri")
                     setRequestProperty("X-Title", "Capri Android")
                 }
+                
                 val body = JSONObject().apply {
                     put("model", MODEL)
-                    put("max_tokens", 80)
+                    put("max_tokens", 250) // Aumentado para modelos de razonamiento
                     put("temperature", 0.7)
                     put("messages", JSONArray().apply {
                         put(JSONObject().apply {
@@ -44,19 +45,37 @@ object AiService {
                         put(JSONObject().apply { put("role", "user"); put("content", prompt) })
                     })
                 }.toString()
+                
                 conn.outputStream.use { it.write(body.toByteArray()) }
                 val code = conn.responseCode
+                
                 if (code == 200) {
                     val txt = conn.inputStream.bufferedReader().use { it.readText() }
-                    val content = JSONObject(txt).getJSONArray("choices")
-                        .getJSONObject(0).getJSONObject("message").getString("content").trim()
-                    main.post { onSuccess(content) }
+                    val message = JSONObject(txt).getJSONArray("choices").getJSONObject(0).getJSONObject("message")
+                    
+                    // Leemos 'content'. Si viene nulo o vacío, intentamos leer 'reasoning'
+                    var content = message.optString("content", "").trim()
+                    if (content.isEmpty() || content == "null" || content == "NULL") {
+                        content = message.optString("reasoning", "").trim()
+                    }
+                    
+                    // Si de plano no hay nada, mandamos un mensaje por defecto
+                    if (content.isEmpty() || content == "null") {
+                        content = "..."
+                    }
+                    
+                    // Limpiamos un poco el texto de razonamiento para que no sea tan largo
+                    val cleanContent = content.replace("\n", " ").take(120)
+                    
+                    Log.d("AiService", "Respuesta final: $cleanContent")
+                    main.post { onSuccess(cleanContent) }
                 } else {
-                    main.post { onError() }  // incluye 429
+                    Log.e("AiService", "Error HTTP: $code")
+                    main.post { onError() }
                 }
                 conn.disconnect()
             } catch (e: Exception) { 
-                e.printStackTrace()
+                Log.e("AiService", "Excepción: ${e.message}")
                 main.post { onError() } 
             }
         }
