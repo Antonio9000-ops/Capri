@@ -3,6 +3,7 @@ package com.capri.pet
 import android.app.AlertDialog
 import android.os.Bundle
 import android.text.InputType
+import android.util.Log
 import android.widget.EditText
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
@@ -23,7 +24,10 @@ class MainActivity : AppCompatActivity() {
         view.setup(engine)
         view.loadAtlas()
 
-        view.onRequestInput = { x, y -> showInputPopup(x, y) }
+        view.onRequestInput = { x, y -> 
+            Log.d("CapriLog", "Doble toque detectado, abriendo popup en X=$x, Y=$y")
+            showInputPopup(x, y) 
+        }
 
         ViewCompat.setOnApplyWindowInsetsListener(view) { v, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
@@ -33,32 +37,52 @@ class MainActivity : AppCompatActivity() {
             insets
         }
 
-        if (!SecurityHelper.hasApiKey(this)) askApiKey()
+        if (!SecurityHelper.hasApiKey(this)) {
+            Log.d("CapriLog", "No hay API Key, mostrando diálogo")
+            askApiKey()
+        } else {
+            Log.d("CapriLog", "API Key encontrada en memoria segura")
+        }
     }
 
     private fun askApiKey() {
         val input = EditText(this).apply {
             hint = "API Key (OpenRouter)"
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-            setTextColor(android.graphics.Color.BLACK) // Fix para que se vea el texto
+            setTextColor(android.graphics.Color.BLACK)
         }
         AlertDialog.Builder(this)
             .setTitle("Configurar API Key")
             .setMessage("Pega tu clave de OpenRouter para que Capri pueda pensar.")
             .setView(input).setCancelable(false)
             .setPositiveButton("Guardar") { _, _ ->
-                input.text.toString().trim().takeIf { it.isNotEmpty() }
-                    ?.let { SecurityHelper.saveApiKey(this, it) }
+                val key = input.text.toString().trim()
+                if (key.isNotEmpty()) {
+                    SecurityHelper.saveApiKey(this, key)
+                    Log.d("CapriLog", "API Key guardada con éxito")
+                } else {
+                    Log.e("CapriLog", "El usuario intentó guardar una API Key vacía")
+                }
             }.show()
     }
 
     private fun showInputPopup(x: Int, y: Int) {
         val popup = CapriInputPopup(this, view, x, y) { text ->
+            Log.d("CapriLog", "Popup envió texto: '$text'")
             engine.isThinking = true
             engine.triggerBubble("Pensando...")
+            
             AiService.ask(this, text,
-                onSuccess = { engine.triggerBubble(it.take(120)); engine.isThinking = false },
-                onError   = { engine.triggerBubble("No puedo pensar ahora..."); engine.isThinking = false })
+                onSuccess = { 
+                    Log.d("CapriLog", "IA respondió: $it")
+                    engine.triggerBubble(it.take(120))
+                    engine.isThinking = false 
+                },
+                onError   = { 
+                    Log.e("CapriLog", "La IA falló o dio error")
+                    engine.triggerBubble("No puedo pensar ahora...")
+                    engine.isThinking = false 
+                })
         }
         view.popup = popup
         popup.show()
@@ -69,7 +93,7 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() { 
         super.onResume(); 
         view.startLoop() 
-        view.invalidate() // Fuerza el redibujado al volver a la app
+        view.invalidate()
     }
 
     override fun onPause() {
