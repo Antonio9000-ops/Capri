@@ -6,9 +6,7 @@ import android.text.InputType
 import android.util.Log
 import android.widget.EditText
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
 
 class MainActivity : AppCompatActivity() {
     private lateinit var view: CapriView
@@ -18,7 +16,9 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
-        view = CapriView(this); setContentView(view)
+        
+        view = CapriView(this)
+        setContentView(view)
 
         engine = PetEngine()
         view.setup(engine)
@@ -29,19 +29,8 @@ class MainActivity : AppCompatActivity() {
             showInputPopup(x, y) 
         }
 
-        ViewCompat.setOnApplyWindowInsetsListener(view) { v, insets ->
-            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            if (v.width > 0 && v.height > 0 && engine.screenW == 0) {
-                view.initEngine(v.width, v.height, v.height - bars.bottom)
-            }
-            insets
-        }
-
         if (!SecurityHelper.hasApiKey(this)) {
-            Log.d("CapriLog", "No hay API Key, mostrando diálogo")
             askApiKey()
-        } else {
-            Log.d("CapriLog", "API Key encontrada en memoria segura")
         }
     }
 
@@ -57,29 +46,21 @@ class MainActivity : AppCompatActivity() {
             .setView(input).setCancelable(false)
             .setPositiveButton("Guardar") { _, _ ->
                 val key = input.text.toString().trim()
-                if (key.isNotEmpty()) {
-                    SecurityHelper.saveApiKey(this, key)
-                    Log.d("CapriLog", "API Key guardada con éxito")
-                } else {
-                    Log.e("CapriLog", "El usuario intentó guardar una API Key vacía")
-                }
+                if (key.isNotEmpty()) SecurityHelper.saveApiKey(this, key)
             }.show()
     }
 
     private fun showInputPopup(x: Int, y: Int) {
         val popup = CapriInputPopup(this, view, x, y) { text ->
-            Log.d("CapriLog", "Popup envió texto: '$text'")
             engine.isThinking = true
             engine.triggerBubble("Pensando...")
             
             AiService.ask(this, text,
                 onSuccess = { 
-                    Log.d("CapriLog", "IA respondió: $it")
                     engine.triggerBubble(it.take(120))
                     engine.isThinking = false 
                 },
                 onError   = { 
-                    Log.e("CapriLog", "La IA falló o dio error")
                     engine.triggerBubble("No puedo pensar ahora...")
                     engine.isThinking = false 
                 })

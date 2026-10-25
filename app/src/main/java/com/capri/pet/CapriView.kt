@@ -9,8 +9,11 @@ import android.hardware.SensorManager
 import android.os.Handler
 import android.os.Looper
 import android.util.AttributeSet
+import android.util.Log
 import android.view.MotionEvent
 import android.view.View
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import kotlin.math.sqrt
 
 class CapriView @JvmOverloads constructor(
@@ -21,6 +24,21 @@ class CapriView @JvmOverloads constructor(
     private val frames = arrayOfNulls<Bitmap>(PetFrame.values().size)
     private val paint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
     private val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(60, 0, 0, 0) }
+    
+    private val bubbleBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { 
+        color = Color.WHITE
+        style = Paint.Style.FILL
+        setShadowLayer(4f, 0f, 2f, Color.argb(100, 0, 0, 0))
+    }
+    private val bubbleTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.BLACK
+        textSize = 45f
+        textAlign = Paint.Align.CENTER
+    }
+    private val bubbleRect = RectF()
+    private val bubblePath = Path()
+    private var currentBubbleText = ""
+
     private val handler = Handler(Looper.getMainLooper())
     private var running = false
     
@@ -30,7 +48,6 @@ class CapriView @JvmOverloads constructor(
     
     val scale = 1.8f
     private val cropPadding = 8f
-
     private val frameOrder = intArrayOf(0, 1, 2, 3, 4, 5)
 
     var popup: CapriInputPopup? = null
@@ -54,13 +71,27 @@ class CapriView @JvmOverloads constructor(
         }
     }
 
-    fun setup(e: PetEngine) { engine = e }
+    fun setup(e: PetEngine) { 
+        engine = e 
+        engine.onBubble = { text, visible ->
+            currentBubbleText = text
+            postInvalidateOnAnimation()
+        }
+    }
     
-    fun initEngine(w: Int, h: Int, floorY: Int) {
-        val visualSize = (PetEngine.SIZE * scale).toInt()
-        val startX = w / 2 - (visualSize / 2)
-        // El suelo real viene de MainActivity (ya resta la barra de navegación)
-        engine.init(w, h, floorY - visualSize, startX)
+    // ESTO ES LO NUEVO: Esperamos a que la vista tenga tamaño real
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        if (w > 0 && h > 0 && ::engine.isInitialized && engine.screenW == 0) {
+            val insets = ViewCompat.getRootWindowInsets(this)
+            val bottomInset = insets?.getInsets(WindowInsetsCompat.Type.systemBars())?.bottom ?: 0
+            
+            val visualSize = (PetEngine.SIZE * scale).toInt()
+            val startX = w / 2 - (visualSize / 2)
+            engine.init(w, h, h - bottomInset - visualSize, startX)
+            
+            Log.d("CapriView", "onSizeChanged: Inicializando motor. Pantalla ${w}x${h}, Suelo: ${h - bottomInset - visualSize}")
+        }
     }
     
     fun startLoop() { if (!running) { running = true; handler.post(tickRunnable) } }
@@ -83,16 +114,11 @@ class CapriView @JvmOverloads constructor(
 
     override fun onSensorChanged(event: SensorEvent) {
         if (event.sensor.type == Sensor.TYPE_ACCELEROMETER) {
-            val x = event.values[0]
-            val y = event.values[1]
-            val z = event.values[2]
+            val x = event.values[0]; val y = event.values[1]; val z = event.values[2]
             val acceleration = sqrt((x * x + y * y + z * z).toDouble()) - SensorManager.GRAVITY_EARTH
-            
             if (acceleration > 12 && System.currentTimeMillis() - lastShakeTime > 2000) {
                 lastShakeTime = System.currentTimeMillis()
-                if (engine.state != PetState.DRAG && engine.state != PetState.JUMP) {
-                    engine.triggerShake()
-                }
+                if (engine.state != PetState.DRAG && engine.state != PetState.JUMP) engine.triggerShake()
             }
         }
     }
@@ -107,13 +133,14 @@ class CapriView @JvmOverloads constructor(
             for (i in px.indices) if (px[i] == 0xFF000000.toInt()) px[i] = 0
             val keyed = Bitmap.createBitmap(px, raw.width, raw.height, Bitmap.Config.ARGB_8888)
             raw.recycle()
-            
             for (f in PetFrame.values()) {
                 val realIndex = frameOrder[f.index]
                 frames[f.index] = Bitmap.createBitmap(keyed, realIndex * PetEngine.SIZE, 0, PetEngine.SIZE, PetEngine.SIZE)
             }
             keyed.recycle()
-        } catch (e: Exception) { e.printStackTrace() }
+        } catch (e: Exception) { 
+            Log.e("CapriView", "Error cargando atlas: ${e.message}")
+        }
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -122,7 +149,6 @@ class CapriView @JvmOverloads constructor(
         val frame = frames[engine.activeFrame.index] ?: return
 
         val scaledSize = PetEngine.SIZE * scale
-        // Forzamos todo a Float para evitar el error de compilación
         val y = (engine.posY + engine.visualBounce() + engine.visualJump()).toFloat()
         
         if (engine.state == PetState.JUMP || engine.state == PetState.FALL) {
@@ -139,16 +165,36 @@ class CapriView @JvmOverloads constructor(
         srcRect.set(paddingInt, paddingInt, PetEngine.SIZE - paddingInt, PetEngine.SIZE - paddingInt)
         
         canvas.drawBitmap(frame, srcRect, drawRect, paint)
+
+        if (engine.bubbleVisible && currentBubbleText.isNotEmpty()) {
+            val textWidth = bubbleTextPaint.measureText(currentBubbleText)
+            val bubbleW = textWidth + 60f
+            val bubbleH = 100f
+            
+            val bx = posXFloat + scaledSize / 2f
+            val by = y - bubbleH - 20f
+            
+            bubbleRect.set(bx - bubbleW / 2, by, bx + bubbleW / 2, by + bubbleH)
+            canvas.drawRoundRect(bubbleRect, 20f, 20f, bubbleBgPaint)
+            
+            bubblePath.reset()
+            bubblePath.moveTo(bx - 15f, by + bubbleH)
+            bubblePath.lineTo(bx + 15f, by + bubbleH)
+            bubblePath.lineTo(bx, by + bubbleH + 20f)
+            bubblePath.close()
+            canvas.drawPath(bubblePath, bubbleBgPaint)
+            
+            val textY = by + (bubbleH / 2f) - ((bubbleTextPaint.descent() + bubbleTextPaint.ascent()) / 2f)
+            canvas.drawText(currentBubbleText, bx, textY, bubbleTextPaint)
+        }
     }
 
     private fun isTouchingCharacter(x: Float, y: Float): Boolean {
         if (!::engine.isInitialized) return false
         val scaledSize = PetEngine.SIZE * scale
         val visualY = (engine.posY + engine.visualBounce() + engine.visualJump()).toFloat()
-        
         val padding = 20f
         val posXFloat = engine.posX.toFloat()
-        
         return x >= posXFloat - padding && x <= posXFloat + scaledSize + padding &&
                y >= visualY - padding && y <= visualY + scaledSize + padding
     }
@@ -159,13 +205,11 @@ class CapriView @JvmOverloads constructor(
         when (ev.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 if (!isTouchingCharacter(ev.x, ev.y)) return false
-                
                 downX = ev.x; downY = ev.y; downTime = System.currentTimeMillis(); isTap = true
                 return true
             }
             MotionEvent.ACTION_MOVE -> {
                 if (!isTap && engine.state != PetState.DRAG) return false
-                
                 val dx = ev.x - downX; val dy = ev.y - downY
                 if (isTap && dx * dx + dy * dy > DRAG_TH * DRAG_TH) {
                     engine.handleTouchDown(ev.x.toInt(), ev.y.toInt()); isTap = false
