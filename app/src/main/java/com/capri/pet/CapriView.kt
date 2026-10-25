@@ -94,7 +94,7 @@ class CapriView @JvmOverloads constructor(
                     val near = ddx * ddx + ddy * ddy <= DT_SLOP * DT_SLOP
                     if (dt in 1..DT_TIMEOUT && near) {
                         lastTapTime = 0L
-                        if (!engine.isThinking && popup?.isShowing != true)
+                        if (!engine.isThinking && popup?.isShowing() != true)
                             onRequestInput?.invoke(engine.posX, engine.posY)
                     } else {
                         lastTapTime = now; lastTapX = ev.x; lastTapY = ev.y
