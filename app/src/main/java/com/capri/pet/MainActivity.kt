@@ -1,10 +1,12 @@
 package com.capri.pet
 
 import android.app.AlertDialog
+import android.graphics.Color
 import android.os.Bundle
 import android.text.InputType
 import android.util.Log
 import android.widget.EditText
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowCompat
 
@@ -15,23 +17,35 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Log.e("CapriLog", "1. onCreate iniciado")
         WindowCompat.setDecorFitsSystemWindows(window, false)
         
         view = CapriView(this)
+        view.setBackgroundColor(Color.GREEN) // Fondo verde para saber si la vista se dibuja
         setContentView(view)
+        Log.e("CapriLog", "2. Vista CapriView asignada")
 
         engine = PetEngine()
         view.setup(engine)
-        view.loadAtlas()
+        Log.e("CapriLog", "3. Motor PetEngine inicializado")
+
+        try {
+            view.loadAtlas()
+            Log.e("CapriLog", "4. Atlas cargado correctamente")
+        } catch (e: Exception) {
+            Log.e("CapriLog", "4. Error cargando Atlas: ${e.message}")
+        }
 
         view.onRequestInput = { x, y -> 
-            Log.d("CapriLog", "Doble toque detectado, abriendo popup en X=$x, Y=$y")
+            Log.e("CapriLog", "Toque detectado en X=$x, Y=$y")
             showInputPopup(x, y) 
         }
 
-        if (!SecurityHelper.hasApiKey(this)) {
-            askApiKey()
-        }
+        // --- SALTEAMOS LA SEGURIDAD TEMPORALMENTE PARA PROBAR ---
+        Log.e("CapriLog", "5. Llamando a askApiKey() directamente...")
+        askApiKey()
+        Log.e("CapriLog", "6. onCreate finalizado")
+        Toast.makeText(this, "App iniciada", Toast.LENGTH_SHORT).show()
     }
 
     private fun askApiKey() {
@@ -46,8 +60,16 @@ class MainActivity : AppCompatActivity() {
             .setView(input).setCancelable(false)
             .setPositiveButton("Guardar") { _, _ ->
                 val key = input.text.toString().trim()
-                if (key.isNotEmpty()) SecurityHelper.saveApiKey(this, key)
+                if (key.isNotEmpty()) {
+                    try {
+                        SecurityHelper.saveApiKey(this, key)
+                        Log.e("CapriLog", "Clave guardada exitosamente.")
+                    } catch (e: Exception) {
+                        Log.e("CapriLog", "Error guardando clave: ${e.message}")
+                    }
+                }
             }.show()
+        Log.e("CapriLog", "7. Diálogo AlertDialog lanzado")
     }
 
     private fun showInputPopup(x: Int, y: Int) {
