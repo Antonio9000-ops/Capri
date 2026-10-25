@@ -5,11 +5,6 @@ enum class PetFrame(val index: Int) {
     WALK_R(0), WALK_L(1), IDLE_R(2), IDLE_L(3), JUMP(4), SLEEP(5)
 }
 
-/**
- * Port fiel de fsm.c. Tick variable: 16ms en WALK/JUMP/FALL/DRAG, 100ms en el resto.
- * dirX vale ±speed (no ±1). posY = baseY en estados no aéreos; el rebote y el
- * salto son offsets visuales que aplica la View al dibujar.
- */
 class PetEngine(
     private val speed: Int = 2,
     private val jumpChance: Int = 15,
@@ -38,7 +33,6 @@ class PetEngine(
         baseY = floor; posY = floor; posX = initialX
         boundMinX = 0; boundMaxX = w - SIZE
         dirX = speed; velY = 0; activeFrame = PetFrame.WALK_R
-        // time(NULL) ^ 0xC0FFEE
         var seed = ((System.currentTimeMillis() / 1000L) and 0xFFFFFFFFL) xor 0xC0FFEEL
         if (seed == 0L) seed = 0xDEADBEEFL
         prngState = seed
@@ -46,7 +40,6 @@ class PetEngine(
         activeFrame = PetFrame.WALK_R
     }
 
-    // Xorshift32 estricto de fsm.c
     private fun xs32(): Long {
         var x = prngState
         x = (x xor ((x shl 13) and 0xFFFFFFFFL)) and 0xFFFFFFFFL
@@ -154,10 +147,7 @@ class PetEngine(
         }
     }
 
-    // Rebote -3 px en ticks 1 y 3 (mód 4) durante WALK
     fun visualBounce() = if (state == PetState.WALK && (ticks % 4 == 1 || ticks % 4 == 3)) -3 else 0
-
-    // Parábola del salto: -4·t·(30-t)/15
     fun visualJump(): Int = if (state == PetState.JUMP)
         (-4.0f * (ticks * (stateDuration - ticks)) / 15.0f).toInt() else 0
 

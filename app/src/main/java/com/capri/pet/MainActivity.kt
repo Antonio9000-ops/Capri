@@ -38,12 +38,13 @@ class MainActivity : AppCompatActivity() {
 
     private fun askApiKey() {
         val input = EditText(this).apply {
-            hint = "API Key (Groq / OpenRouter)"
+            hint = "API Key (OpenRouter)"
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            setTextColor(android.graphics.Color.BLACK) // Fix para que se vea el texto
         }
         AlertDialog.Builder(this)
             .setTitle("Configurar API Key")
-            .setMessage("Pega tu clave para que Capri pueda pensar.")
+            .setMessage("Pega tu clave de OpenRouter para que Capri pueda pensar.")
             .setView(input).setCancelable(false)
             .setPositiveButton("Guardar") { _, _ ->
                 input.text.toString().trim().takeIf { it.isNotEmpty() }
@@ -65,8 +66,11 @@ class MainActivity : AppCompatActivity() {
 
     override fun onUserLeaveHint() { super.onUserLeaveHint(); userLeaving = true }
 
-    override fun onResume() { super.onResume(); view.startLoop()
-        view.invalidate() }
+    override fun onResume() { 
+        super.onResume(); 
+        view.startLoop() 
+        view.invalidate() // Fuerza el redibujado al volver a la app
+    }
 
     override fun onPause() {
         super.onPause()
