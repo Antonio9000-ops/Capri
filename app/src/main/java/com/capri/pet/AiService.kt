@@ -12,8 +12,10 @@ import java.util.concurrent.Executors
 object AiService {
     private val executor = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
-    private const val ENDPOINT = "https://api.groq.com/openai/v1/chat/completions"
-    private const val MODEL = "llama-3.3-70b-versatile"
+    
+    // Endpoint y modelo de OpenRouter
+    private const val ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
+    private const val MODEL = "openrouter/free"
 
     fun ask(ctx: Context, prompt: String, onSuccess: (String) -> Unit, onError: () -> Unit) {
         val key = SecurityHelper.getApiKey(ctx) ?: return onError()
@@ -26,6 +28,9 @@ object AiService {
                     doOutput = true
                     setRequestProperty("Content-Type", "application/json")
                     setRequestProperty("Authorization", "Bearer $key")
+                    // OpenRouter requiere estos headers para identificación
+                    setRequestProperty("HTTP-Referer", "https://github.com/Antonio9000-ops/Capri")
+                    setRequestProperty("X-Title", "Capri Android")
                 }
                 val body = JSONObject().apply {
                     put("model", MODEL)
@@ -34,7 +39,7 @@ object AiService {
                     put("messages", JSONArray().apply {
                         put(JSONObject().apply {
                             put("role", "system")
-                            put("content", "Eres Capri, mascota virtual. Responde breve, máx 120 caracteres.")
+                            put("content", "Eres Capri, una mascota virtual. Responde breve, máximo 120 caracteres.")
                         })
                         put(JSONObject().apply { put("role", "user"); put("content", prompt) })
                     })
@@ -46,9 +51,14 @@ object AiService {
                     val content = JSONObject(txt).getJSONArray("choices")
                         .getJSONObject(0).getJSONObject("message").getString("content").trim()
                     main.post { onSuccess(content) }
-                } else main.post { onError() }  // incluye 429
+                } else {
+                    main.post { onError() }  // incluye 429
+                }
                 conn.disconnect()
-            } catch (e: Exception) { e.printStackTrace(); main.post { onError() } }
+            } catch (e: Exception) { 
+                e.printStackTrace()
+                main.post { onError() } 
+            }
         }
     }
 }

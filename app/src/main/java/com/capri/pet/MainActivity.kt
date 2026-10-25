@@ -65,7 +65,8 @@ class MainActivity : AppCompatActivity() {
 
     override fun onUserLeaveHint() { super.onUserLeaveHint(); userLeaving = true }
 
-    override fun onResume() { super.onResume(); view.startLoop() }
+    override fun onResume() { super.onResume(); view.startLoop()
+        view.invalidate() }
 
     override fun onPause() {
         super.onPause()
