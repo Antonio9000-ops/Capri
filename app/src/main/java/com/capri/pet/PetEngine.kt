@@ -63,6 +63,12 @@ class PetEngine(
         }
     }
 
+    fun triggerShake() {
+        if (state == PetState.IDLE || state == PetState.WALK || state == PetState.SLEEP || state == PetState.LOOK) {
+            enterState(PetState.JUMP)
+        }
+    }
+
     fun triggerBubble(text: String) {
         if (state == PetState.DRAG) return
         bubbleVisible = true
