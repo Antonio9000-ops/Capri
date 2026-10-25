@@ -8,8 +8,10 @@ import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.os.Handler
 import android.os.Looper
+import android.text.Layout
+import android.text.StaticLayout
+import android.text.TextPaint
 import android.util.AttributeSet
-import android.util.Log
 import android.view.MotionEvent
 import android.view.View
 import androidx.core.view.ViewCompat
@@ -25,19 +27,22 @@ class CapriView @JvmOverloads constructor(
     private val paint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
     private val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(60, 0, 0, 0) }
     
+    // --- PINTURA Y LAYOUT PARA LA BURBUJA ---
     private val bubbleBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { 
         color = Color.WHITE
         style = Paint.Style.FILL
         setShadowLayer(4f, 0f, 2f, Color.argb(100, 0, 0, 0))
     }
-    private val bubbleTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    private val bubbleTextPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.BLACK
-        textSize = 45f
-        textAlign = Paint.Align.CENTER
+        textSize = 40f
     }
     private val bubbleRect = RectF()
     private val bubblePath = Path()
     private var currentBubbleText = ""
+    private var bubbleLayout: StaticLayout? = null
+    private var bubbleW = 0f
+    private var bubbleH = 0f
 
     private val handler = Handler(Looper.getMainLooper())
     private var running = false
@@ -75,11 +80,26 @@ class CapriView @JvmOverloads constructor(
         engine = e 
         engine.onBubble = { text, visible ->
             currentBubbleText = text
+            if (visible && text.isNotEmpty()) {
+                buildBubbleLayout(text)
+            }
             postInvalidateOnAnimation()
         }
     }
+
+    private fun buildBubbleLayout(text: String) {
+        val maxWidth = (width * 0.8f).toInt()
+        if (maxWidth <= 0) return
+        
+        bubbleLayout = StaticLayout.Builder.obtain(text, 0, text.length, bubbleTextPaint, maxWidth)
+            .setAlignment(Layout.Alignment.ALIGN_CENTER)
+            .setLineSpacing(0f, 1f)
+            .build()
+        
+        bubbleW = bubbleLayout!!.width.toFloat() + 60f
+        bubbleH = bubbleLayout!!.height.toFloat() + 60f
+    }
     
-    // ESTO ES LO NUEVO: Esperamos a que la vista tenga tamaño real
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         if (w > 0 && h > 0 && ::engine.isInitialized && engine.screenW == 0) {
@@ -89,8 +109,6 @@ class CapriView @JvmOverloads constructor(
             val visualSize = (PetEngine.SIZE * scale).toInt()
             val startX = w / 2 - (visualSize / 2)
             engine.init(w, h, h - bottomInset - visualSize, startX)
-            
-            Log.d("CapriView", "onSizeChanged: Inicializando motor. Pantalla ${w}x${h}, Suelo: ${h - bottomInset - visualSize}")
         }
     }
     
@@ -138,9 +156,7 @@ class CapriView @JvmOverloads constructor(
                 frames[f.index] = Bitmap.createBitmap(keyed, realIndex * PetEngine.SIZE, 0, PetEngine.SIZE, PetEngine.SIZE)
             }
             keyed.recycle()
-        } catch (e: Exception) { 
-            Log.e("CapriView", "Error cargando atlas: ${e.message}")
-        }
+        } catch (e: Exception) { e.printStackTrace() }
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -160,23 +176,20 @@ class CapriView @JvmOverloads constructor(
 
         val posXFloat = engine.posX.toFloat()
         drawRect.set(posXFloat, y, posXFloat + scaledSize, y + scaledSize)
-        
         val paddingInt = cropPadding.toInt()
         srcRect.set(paddingInt, paddingInt, PetEngine.SIZE - paddingInt, PetEngine.SIZE - paddingInt)
-        
         canvas.drawBitmap(frame, srcRect, drawRect, paint)
 
-        if (engine.bubbleVisible && currentBubbleText.isNotEmpty()) {
-            val textWidth = bubbleTextPaint.measureText(currentBubbleText)
-            val bubbleW = textWidth + 60f
-            val bubbleH = 100f
-            
+        // --- DIBUJAR BURBUJA MULTILÍNEA ---
+        if (engine.bubbleVisible && currentBubbleText.isNotEmpty() && bubbleLayout != null) {
             val bx = posXFloat + scaledSize / 2f
             val by = y - bubbleH - 20f
             
+            // Contenedor de la burbuja
             bubbleRect.set(bx - bubbleW / 2, by, bx + bubbleW / 2, by + bubbleH)
             canvas.drawRoundRect(bubbleRect, 20f, 20f, bubbleBgPaint)
             
+            // Pico de la burbuja
             bubblePath.reset()
             bubblePath.moveTo(bx - 15f, by + bubbleH)
             bubblePath.lineTo(bx + 15f, by + bubbleH)
@@ -184,8 +197,12 @@ class CapriView @JvmOverloads constructor(
             bubblePath.close()
             canvas.drawPath(bubblePath, bubbleBgPaint)
             
-            val textY = by + (bubbleH / 2f) - ((bubbleTextPaint.descent() + bubbleTextPaint.ascent()) / 2f)
-            canvas.drawText(currentBubbleText, bx, textY, bubbleTextPaint)
+            // Dibujar texto con StaticLayout
+            canvas.save()
+            // Centrar el texto dentro de la burbuja
+            canvas.translate(bx - bubbleW / 2 + 30f, by + 30f)
+            bubbleLayout?.draw(canvas)
+            canvas.restore()
         }
     }
 
