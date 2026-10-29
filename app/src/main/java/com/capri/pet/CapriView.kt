@@ -56,6 +56,7 @@ class CapriView @JvmOverloads constructor(
 
     var popup: CapriInputPopup? = null
     var onRequestInput: ((Int, Int) -> Unit)? = null
+    var onReady: (() -> Unit)? = null
 
     private var downX = 0f; private var downY = 0f; private var downTime = 0L
     private var isTap = false
@@ -110,16 +111,12 @@ class CapriView @JvmOverloads constructor(
             engine.init(w, h, h - bottomInset - visualSize, startX)
             // El motor limita con SIZE (96), pero el sprite se dibuja a SIZE * scale.
             engine.boundMaxX = w - visualSize
+            onReady?.invoke()
         }
     }
     
-    fun startLoop() { if (!running) { running = true; handler.post(tickRunnable) } }
-    fun stopLoop() { running = false; handler.removeCallbacks(tickRunnable) }
-
-    override fun onAttachedToWindow() {
-        super.onAttachedToWindow()
-        sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_GAME)
-    }
+    fun startLoop() { if (!running) { running = true; sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_GAME); handler.post(tickRunnable) } }
+    fun stopLoop() { running = false; sensorManager.unregisterListener(this); handler.removeCallbacks(tickRunnable) }
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
@@ -180,27 +177,27 @@ class CapriView @JvmOverloads constructor(
         srcRect.set(paddingInt, paddingInt, PetEngine.SIZE - paddingInt, PetEngine.SIZE - paddingInt)
         canvas.drawBitmap(frame, srcRect, drawRect, paint)
 
-        // --- DIBUJAR BURBUJA MULTILÍNEA ---
+        // --- DIBUJAR BURBUJA MULTILÍNEA (recortada a la pantalla) ---
         if (engine.bubbleVisible && currentBubbleText.isNotEmpty() && bubbleLayout != null) {
             val bx = posXFloat + scaledSize / 2f
-            val by = y - bubbleH - 20f
-            
-            // Contenedor de la burbuja
-            bubbleRect.set(bx - bubbleW / 2, by, bx + bubbleW / 2, by + bubbleH)
+            val left = (bx - bubbleW / 2).coerceIn(10f, (width - bubbleW - 10f).coerceAtLeast(10f))
+            val top = (y - bubbleH - 20f).coerceAtLeast(10f)
+
+            bubbleRect.set(left, top, left + bubbleW, top + bubbleH)
             canvas.drawRoundRect(bubbleRect, 20f, 20f, bubbleBgPaint)
             
-            // Pico de la burbuja
+            // Pico de la burbuja, apuntando siempre a Capri
+            val tailX = bx.coerceIn(left + 20f, left + bubbleW - 20f)
             bubblePath.reset()
-            bubblePath.moveTo(bx - 15f, by + bubbleH)
-            bubblePath.lineTo(bx + 15f, by + bubbleH)
-            bubblePath.lineTo(bx, by + bubbleH + 20f)
+            bubblePath.moveTo(tailX - 15f, top + bubbleH)
+            bubblePath.lineTo(tailX + 15f, top + bubbleH)
+            bubblePath.lineTo(tailX, top + bubbleH + 20f)
             bubblePath.close()
             canvas.drawPath(bubblePath, bubbleBgPaint)
             
             // Dibujar texto con StaticLayout
             canvas.save()
-            // Centrar el texto dentro de la burbuja
-            canvas.translate(bx - bubbleW / 2 + 30f, by + 30f)
+            canvas.translate(left + 30f, top + 30f)
             bubbleLayout?.draw(canvas)
             canvas.restore()
         }

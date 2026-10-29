@@ -34,4 +34,29 @@ class PetEngineTest {
         assertEquals(PetState.IDLE, e.state)
         assertEquals(e.floorY, e.posY)
     }
+
+    @Test
+    fun `el lanzamiento sale volando y aterriza dentro de la pantalla`() {
+        val w = 1080
+        val e = newEngine(w = w)
+        e.handleTouchDown(500, 600)
+        var y = 600
+        repeat(20) { y -= 20; e.handleTouchMove(520, y) }
+        e.handleTouchUp()
+        assertEquals(PetState.FALL, e.state)
+        repeat(400) { e.update() }
+        assertTrue(e.posY == e.floorY)
+        assertTrue(e.posX >= e.boundMinX && e.posX + spriteW <= w)
+    }
+
+    @Test
+    fun `el animo tiene limites`() {
+        val e = newEngine()
+        repeat(10) { e.triggerPet() }
+        assertEquals(5, e.animo)
+        e.handleTouchDown(500, e.floorY) // la agarran desde su posición
+        e.handleTouchMove(500, 900) // la lanzan al aire con un empujón
+        e.handleTouchUp()
+        assertEquals(4, e.animo)
+    }
 }

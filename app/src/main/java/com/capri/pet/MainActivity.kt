@@ -2,17 +2,32 @@ package com.capri.pet
 
 import android.app.AlertDialog
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.text.InputType
-import android.util.Log
 import android.widget.EditText
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowCompat
+import org.json.JSONObject
+
+data class Recordatorio(val texto: String, val min: Int)
+
+// Detecta 'recuérdame <algo> en <n> minutos' sin gastar la IA ni llamadas de red.
+fun parsearRecordatorio(msg: String): Recordatorio? {
+    val m = Regex("""(?:recu[eé]rdame|recordar)\s+(.+?)\s+en\s+(\d{1,3})\s*(?:min|minutos?)\b""", RegexOption.IGNORE_CASE)
+        .find(msg.trim()) ?: return null
+    val min = m.groupValues[2].toInt()
+    if (min == 0) return null
+    return Recordatorio(m.groupValues[1].trim(), min)
+}
 
 class MainActivity : AppCompatActivity() {
     private lateinit var view: CapriView
     private lateinit var engine: PetEngine
     private var userLeaving = false
     private val fallos = listOf("No puedo pensar ahora...", "Mmm... mi cabeza está en blanco", "Dame un segundo y vuelve a intentarlo")
+    private val historial = mutableListOf<JSONObject>()
+    private val reloj = Handler(Looper.getMainLooper())
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -22,8 +37,14 @@ class MainActivity : AppCompatActivity() {
         setContentView(view)
 
         engine = PetEngine()
+        engine.animo = Memoria.animo(this)
         view.setup(engine)
         view.loadAtlas()
+
+        historial.addAll(Memoria.cargar(this))
+        view.onReady = {
+            if (historial.isNotEmpty()) engine.triggerBubble("¡De vuelta! ¿Seguimos donde lo dejamos?")
+        }
 
         view.onRequestInput = { x, y -> 
             showInputPopup(x, y) 
@@ -55,24 +76,43 @@ class MainActivity : AppCompatActivity() {
 
     private fun showInputPopup(x: Int, y: Int) {
         if (!SecurityHelper.hasApiKey(this)) { askApiKey(); return }
-        val popup = CapriInputPopup(this, view, x, y) { text ->
-            engine.isThinking = true
-            engine.triggerBubble("Pensando...")
-            
-            AiService.ask(this, text,
-                onSuccess = { 
-                    engine.triggerBubble(it.take(120))
-                    engine.isThinking = false 
-                },
-                onError   = { code ->
-                    engine.isThinking = false
-                    // 401/402/403 = clave inválida, sin saldo o sin permiso: volver a pedirla
-                    if (code == 401 || code == 402 || code == 403) askApiKey()
-                    else engine.triggerBubble(fallos.random())
-                })
-        }
+        val popup = CapriInputPopup(this, view, x, y,
+            onSend = { text ->
+                val cita = parsearRecordatorio(text)
+                if (cita != null) { programar(cita); return@CapriInputPopup }
+                engine.isThinking = true
+                engine.triggerBubble("Pensando...")
+                
+                AiService.ask(this, text, historial.toList(), engine.animo,
+                    onSuccess = { respuesta ->
+                        engine.isThinking = false
+                        engine.triggerBubble(respuesta.take(120))
+                        // Solo guardamos intercambios que sí salieron bien
+                        Memoria.agregar(this, historial, "user", text)
+                        Memoria.agregar(this, historial, "assistant", respuesta)
+                        Memoria.animo(this, engine.animo)
+                    },
+                    onError   = { code ->
+                        engine.isThinking = false
+                        // 401/402/403 = clave inválida, sin saldo o sin permiso: volver a pedirla
+                        if (code == 401 || code == 402 || code == 403) askApiKey()
+                        else engine.triggerBubble(fallos.random())
+                    })
+            },
+            onOlvidar = {
+                Memoria.olvidar(this)
+                historial.clear()
+                engine.triggerBubble("Memoria borrada. ¿Y tú quién eres?")
+            })
         view.popup = popup
         popup.show()
+    }
+
+    private fun programar(r: Recordatorio) {
+        engine.triggerBubble("Listo: te aviso en ${r.min} min")
+        reloj.postDelayed({
+            engine.triggerBubble("⏰ ${r.texto}")
+        }, r.min * 60_000L)
     }
 
     override fun onUserLeaveHint() { super.onUserLeaveHint(); userLeaving = true }

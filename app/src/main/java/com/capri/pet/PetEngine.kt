@@ -5,11 +5,11 @@ enum class PetFrame(val index: Int) {
     WALK_R(0), WALK_L(1), IDLE_R(2), IDLE_L(3), JUMP(4), SLEEP(5)
 }
 
-class PetEngine(
-    private val speed: Int = 2,
-    private val jumpChance: Int = 15,
-    private val lookChance: Int = 30
-) {
+class PetEngine {
+    private val speed = 2
+    private val jumpChance = 15
+    private val lookChance = 30
+
     var screenW = 0; var screenH = 0
     var floorY = 0; var boundMinX = 0; var boundMaxX = 0
 
@@ -27,6 +27,11 @@ class PetEngine(
     var onBubble: ((String, Boolean) -> Unit)? = null
 
     private var dragOffX = 0; private var dragOffY = 0
+    private var lastDragX = 0; private var lastDragY = 0
+    private var flyVelX = 0
+
+    // Animico: +1 mimo, -1 golpe de arrastre, tope ±5. Se guarda con la memoria.
+    var animo = 0
 
     fun init(w: Int, h: Int, floor: Int, initialX: Int) {
         screenW = w; screenH = h; floorY = floor
@@ -58,7 +63,7 @@ class PetEngine(
         stateDuration = when (s) {
             PetState.WALK -> randRange(80, 180)
             PetState.IDLE -> randRange(30, 60)
-            PetState.SLEEP -> randRange(15, 30)
+            PetState.SLEEP -> randRange(15, 30) * if (esNoche()) 4 else 1
             PetState.LOOK -> randRange(20, 40)
             PetState.JUMP -> 30
             PetState.TALKING -> 60
@@ -77,6 +82,7 @@ class PetEngine(
     // Un toque: mimo. Salta y suelta un corazón mientras dura el salto.
     fun triggerPet() {
         if (state == PetState.DRAG) return
+        animo = (animo + 1).coerceAtMost(5)
         enterState(PetState.JUMP)
         showBubble("♥")
     }
@@ -98,18 +104,31 @@ class PetEngine(
     fun handleTouchDown(tx: Int, ty: Int) {
         if (state == PetState.DRAG) return
         enterState(PetState.DRAG)
+        showBubble("¡Alto!")
         dragOffX = tx - posX
         dragOffY = ty - posY
+        lastDragX = tx; lastDragY = ty
     }
     fun handleTouchMove(tx: Int, ty: Int) {
         if (state != PetState.DRAG) return
+        flyVelX = (2 * (tx - lastDragX)).coerceIn(-40, 40)
+        velY = (2 * (ty - lastDragY)).coerceIn(-60, 60)
+        lastDragX = tx; lastDragY = ty
         posX = (tx - dragOffX).coerceIn(boundMinX, boundMaxX)
         posY = (ty - dragOffY).coerceIn(0, floorY)
     }
     fun handleTouchUp() {
         if (state != PetState.DRAG) return
-        if (posY < floorY) { enterState(PetState.FALL); velY = 0 }
+        if (posY < floorY) {
+            if (kotlin.math.abs(velY) > 50) animo = (animo - 1).coerceAtLeast(-5)
+            enterState(PetState.FALL)
+        }
         else { posY = floorY; baseY = floorY; enterState(PetState.WALK) }
+    }
+
+    private fun esNoche(): Boolean {
+        val h = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+        return h >= 22 || h < 6
     }
 
     fun update() {
@@ -117,8 +136,9 @@ class PetEngine(
         if (state == PetState.FALL) {
             activeFrame = PetFrame.JUMP
             velY += 2; posY += velY
+            posX = (posX + flyVelX).coerceIn(boundMinX, boundMaxX)
             if (posY >= floorY) {
-                posY = floorY; baseY = floorY; velY = 0
+                posY = floorY; baseY = floorY; velY = 0; flyVelX = 0
                 enterState(PetState.WALK)
             }
             return

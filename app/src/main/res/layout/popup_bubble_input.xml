@@ -11,7 +11,14 @@
         android:textColor="#000000"
         android:textColorHint="#888888" />
 
-    <Button android:id="@+id/btn_send"
-        android:layout_width="wrap_content" android:layout_height="wrap_content"
-        android:layout_gravity="end" android:text="Enviar" />
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal">
+        <TextView android:id="@+id/btn_olvidar"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="🧹" android:textSize="18sp" android:padding="6dp" />
+        <Space android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1" />
+        <Button android:id="@+id/btn_send"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="Enviar" />
+    </LinearLayout>
 </LinearLayout>

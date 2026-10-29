@@ -8,13 +8,15 @@ import android.view.inputmethod.InputMethodManager
 import android.widget.Button
 import android.widget.EditText
 import android.widget.PopupWindow
+import android.widget.TextView
 
 class CapriInputPopup(
     private val context: Context,
     private val anchor: View,
     private val capriX: Int,
     private val capriY: Int,
-    private val onSend: (String) -> Unit
+    private val onSend: (String) -> Unit,
+    private val onOlvidar: () -> Unit
 ) {
     private val popup: PopupWindow
     private val edit: EditText
@@ -23,6 +25,7 @@ class CapriInputPopup(
         val v = LayoutInflater.from(context).inflate(R.layout.popup_bubble_input, null)
         edit = v.findViewById(R.id.edit_input)
         val btn = v.findViewById<Button>(R.id.btn_send)
+        val olv = v.findViewById<TextView>(R.id.btn_olvidar)
         
         popup = PopupWindow(v, ViewGroup.LayoutParams.WRAP_CONTENT,
             ViewGroup.LayoutParams.WRAP_CONTENT, true).apply {
@@ -41,6 +44,7 @@ class CapriInputPopup(
                 onSend(t) 
             }
         }
+        olv.setOnClickListener { onOlvidar() }
     }
 
     fun show() {
