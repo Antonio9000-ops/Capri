@@ -38,6 +38,8 @@ class PetEngine(
         prngState = seed
         enterState(PetState.WALK)
         activeFrame = PetFrame.WALK_R
+        val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+        showBubble(if (hour < 6 || hour >= 21) "Buenas noches" else if (hour < 12) "Buenos días" else "Buenas tardes")
     }
 
     private fun xs32(): Long {
@@ -52,6 +54,7 @@ class PetEngine(
 
     private fun enterState(s: PetState) {
         state = s; ticks = 0
+        dismissBubble()
         stateDuration = when (s) {
             PetState.WALK -> randRange(80, 180)
             PetState.IDLE -> randRange(30, 60)
@@ -61,18 +64,30 @@ class PetEngine(
             PetState.TALKING -> 60
             PetState.FALL, PetState.DRAG -> 0
         }
+        if (s == PetState.SLEEP) showBubble("Zzz")
     }
 
     fun triggerShake() {
         if (state == PetState.IDLE || state == PetState.WALK || state == PetState.SLEEP || state == PetState.LOOK) {
             enterState(PetState.JUMP)
+            showBubble("¡Uy!")
         }
+    }
+
+    // Un toque: mimo. Salta y suelta un corazón mientras dura el salto.
+    fun triggerPet() {
+        if (state == PetState.DRAG) return
+        enterState(PetState.JUMP)
+        showBubble("♥")
     }
 
     fun triggerBubble(text: String) {
         if (state == PetState.DRAG) return
-        bubbleVisible = true
         enterState(PetState.TALKING)
+        showBubble(text)
+    }
+    private fun showBubble(text: String) {
+        bubbleVisible = true
         onBubble?.invoke(text, true)
     }
     private fun dismissBubble() {
@@ -82,7 +97,6 @@ class PetEngine(
 
     fun handleTouchDown(tx: Int, ty: Int) {
         if (state == PetState.DRAG) return
-        dismissBubble()
         enterState(PetState.DRAG)
         dragOffX = tx - posX
         dragOffY = ty - posY
@@ -139,7 +153,7 @@ class PetEngine(
             }
             PetState.TALKING -> {
                 activeFrame = if (dirX > 0) PetFrame.IDLE_R else PetFrame.IDLE_L
-                if (ticks > stateDuration) { dismissBubble(); enterState(PetState.IDLE) }
+                if (ticks > stateDuration && !isThinking) enterState(PetState.IDLE)
             }
             PetState.IDLE -> {
                 activeFrame = if (dirX > 0) PetFrame.IDLE_R else PetFrame.IDLE_L

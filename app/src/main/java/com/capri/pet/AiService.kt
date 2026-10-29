@@ -17,8 +17,8 @@ object AiService {
     private const val ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
     private const val MODEL = "openrouter/free"
 
-    fun ask(ctx: Context, prompt: String, onSuccess: (String) -> Unit, onError: () -> Unit) {
-        val key = SecurityHelper.getApiKey(ctx) ?: return onError()
+    fun ask(ctx: Context, prompt: String, onSuccess: (String) -> Unit, onError: (Int) -> Unit) {
+        val key = SecurityHelper.getApiKey(ctx) ?: return onError(401)
         
         executor.execute {
             try {
@@ -71,12 +71,12 @@ object AiService {
                     main.post { onSuccess(cleanContent) }
                 } else {
                     Log.e("AiService", "Error HTTP: $code")
-                    main.post { onError() }
+                    main.post { onError(code) }
                 }
                 conn.disconnect()
             } catch (e: Exception) { 
                 Log.e("AiService", "Excepción: ${e.message}")
-                main.post { onError() } 
+                main.post { onError(0) } 
             }
         }
     }

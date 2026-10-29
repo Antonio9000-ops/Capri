@@ -12,6 +12,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var view: CapriView
     private lateinit var engine: PetEngine
     private var userLeaving = false
+    private val fallos = listOf("No puedo pensar ahora...", "Mmm... mi cabeza está en blanco", "Dame un segundo y vuelve a intentarlo")
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -42,7 +43,8 @@ class MainActivity : AppCompatActivity() {
         AlertDialog.Builder(this)
             .setTitle("Configurar API Key")
             .setMessage("Pega tu clave de OpenRouter para que Capri pueda pensar.")
-            .setView(input).setCancelable(false)
+            .setView(input).setCancelable(true)
+            .setNegativeButton("Ahora no", null)
             .setPositiveButton("Guardar") { _, _ ->
                 val key = input.text.toString().trim()
                 if (key.isNotEmpty()) {
@@ -52,6 +54,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showInputPopup(x: Int, y: Int) {
+        if (!SecurityHelper.hasApiKey(this)) { askApiKey(); return }
         val popup = CapriInputPopup(this, view, x, y) { text ->
             engine.isThinking = true
             engine.triggerBubble("Pensando...")
@@ -61,9 +64,11 @@ class MainActivity : AppCompatActivity() {
                     engine.triggerBubble(it.take(120))
                     engine.isThinking = false 
                 },
-                onError   = { 
-                    engine.triggerBubble("No puedo pensar ahora...")
-                    engine.isThinking = false 
+                onError   = { code ->
+                    engine.isThinking = false
+                    // 401/402/403 = clave inválida, sin saldo o sin permiso: volver a pedirla
+                    if (code == 401 || code == 402 || code == 403) askApiKey()
+                    else engine.triggerBubble(fallos.random())
                 })
         }
         view.popup = popup

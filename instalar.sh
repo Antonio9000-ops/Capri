@@ -8,7 +8,7 @@ ADB_DEVICE="192.168.1.100:38195"
 DEST_FILE="$HOME/Descargas/Capri.apk"
 
 echo "🔍 Buscando la última compilación exitosa en GitHub..."
-RUN_ID=$(gh run list --repo "$REPO" --limit 1 --json databaseId --jq '.[0].databaseId')
+RUN_ID=$(gh run list --repo "$REPO" --status success --limit 1 --json databaseId --jq '.[0].databaseId')
 
 if [ -z "$RUN_ID" ]; then
     echo "❌ No se encontraron ejecuciones recientes."

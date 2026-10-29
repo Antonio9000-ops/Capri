@@ -53,7 +53,6 @@ class CapriView @JvmOverloads constructor(
     
     val scale = 1.8f
     private val cropPadding = 8f
-    private val frameOrder = intArrayOf(0, 1, 2, 3, 4, 5)
 
     var popup: CapriInputPopup? = null
     var onRequestInput: ((Int, Int) -> Unit)? = null
@@ -109,6 +108,8 @@ class CapriView @JvmOverloads constructor(
             val visualSize = (PetEngine.SIZE * scale).toInt()
             val startX = w / 2 - (visualSize / 2)
             engine.init(w, h, h - bottomInset - visualSize, startX)
+            // El motor limita con SIZE (96), pero el sprite se dibuja a SIZE * scale.
+            engine.boundMaxX = w - visualSize
         }
     }
     
@@ -152,8 +153,7 @@ class CapriView @JvmOverloads constructor(
             val keyed = Bitmap.createBitmap(px, raw.width, raw.height, Bitmap.Config.ARGB_8888)
             raw.recycle()
             for (f in PetFrame.values()) {
-                val realIndex = frameOrder[f.index]
-                frames[f.index] = Bitmap.createBitmap(keyed, realIndex * PetEngine.SIZE, 0, PetEngine.SIZE, PetEngine.SIZE)
+                frames[f.index] = Bitmap.createBitmap(keyed, f.index * PetEngine.SIZE, 0, PetEngine.SIZE, PetEngine.SIZE)
             }
             keyed.recycle()
         } catch (e: Exception) { e.printStackTrace() }
@@ -252,6 +252,7 @@ class CapriView @JvmOverloads constructor(
                         }
                     } else {
                         lastTapTime = now; lastTapX = ev.x; lastTapY = ev.y
+                        engine.triggerPet()
                     }
                 } else {
                     engine.handleTouchUp()
