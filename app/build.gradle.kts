@@ -16,6 +16,16 @@ android {
         versionName = "1.0"
     }
 
+    // Clave de debug fija: sin esto, cada build de CI se firma con una clave
+    // distinta y Android rechaza la actualización (INSTALL_FAILED_UPDATE_INCOMPATIBLE).
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("capri-debug.jks")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
