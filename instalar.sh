@@ -3,9 +3,9 @@
 # --- CONFIGURACIÓN ---
 REPO="Antonio9000-ops/Capri"
 ARTIFACT="capri-debug-apk"
-# Pon aquí la IP de tu Oppo que te sale en `adb devices`
-ADB_DEVICE="192.168.1.100:38195" 
 DEST_FILE="$HOME/Descargas/Capri.apk"
+# El puerto de la depuración inalámbrica cambia en cada reconexión: se toma el primer equipo conectado.
+ADB_DEVICE=$(adb devices | awk '$2=="device"{print $1; exit}')
 
 echo "🔍 Buscando la última compilación exitosa en GitHub..."
 RUN_ID=$(gh run list --repo "$REPO" --status success --limit 1 --json databaseId --jq '.[0].databaseId')
@@ -25,9 +25,11 @@ if [ -f "$TMP_DIR/app-debug.apk" ]; then
     rm -rf "$TMP_DIR"
     
     echo "📲 Instalando en el dispositivo ($ADB_DEVICE)..."
-    adb -s "$ADB_DEVICE" install -r "$DEST_FILE"
-    
-    echo "✅ ¡Listo! La nueva versión de Capri se ha instalado."
+    if adb -s "$ADB_DEVICE" install -r "$DEST_FILE"; then
+        echo "✅ ¡Listo! La nueva versión de Capri se ha instalado."
+    else
+        echo "❌ No se pudo instalar. Desbloquea el teléfono y comprueba la depuración inalámbrica."
+    fi
 else
     echo "❌ Error: No se encontró el APK en el artefacto descargado."
     rm -rf "$TMP_DIR"
